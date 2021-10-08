@@ -1,11 +1,24 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from main import Game
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+db = SQLAlchemy(app)
 
 p1_name = 'Alex'
 p2_name = 'Max'
 game = Game(p1_name, p2_name)
+
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), nullable=False)
+    password = db.Column(db.String(8), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+
+    def __repr__(self):
+        return f'<User: {self.username}>'
 
 
 @app.route('/', methods=['GET'])
@@ -128,6 +141,84 @@ def table_cards():
         'message': 'table cards',
         'card': table,
     })
+
+
+@app.route('/register/', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        user_data: dict = request.form.to_dict()
+        username: str = user_data.get('username')
+        email: str = user_data.get('email')
+        password: str = user_data.get('password')
+        confirm_password: str = user_data.get('confirm_password')
+        db.create_all()
+
+        if password == confirm_password:
+            user = User(username=username, email=email, password=password)
+            db.session.add(user)
+            db.session.commit()
+
+            return jsonify(
+                {
+                    'message': f'{user} successfully registered',
+                    'status': 201,
+                }
+            )
+        return jsonify(
+            {
+                'message': 'password doesnt match',
+                'status': 400,
+            }
+        )
+
+    return jsonify(
+        {
+            'message': 'register page',
+            'status': 200,
+        }
+    )
+
+
+@app.route('/login', methods=['POST', 'GET'])
+def login():
+    if request.method == 'POST':
+        user_data: dict = request.form.to_dict()
+        email: str = user_data.get('email')
+        password: str = user_data.get('password')
+
+        user = User.query.filter_by(email=email).first()
+        print(user.password, user.email)
+        # @TODO: Generate token
+
+        if email == user.email and password == user.password:
+            return jsonify(
+                {
+                    'message': 'successfully logged in',
+                    'status': 200,
+                }
+            )
+        return jsonify(
+            {
+                'message': 'password or email does not match',
+                'status': 400
+            }
+        )
+
+    return jsonify(
+        {
+            'message': 'login page',
+            'status': 200,
+        }
+    )
+
+
+@app.route('/all_users')
+def all_users():
+    return jsonify(
+        {
+            'users': f'{User.query.all()}'
+        }
+    )
 
 
 if __name__ == '__main__':
